@@ -177,6 +177,11 @@ public:
 
     void ChangeDataset();
 
+    Atlas* getAtlas();
+
+    FrameDrawer* getMpFrameDrawer();
+
+
     //void SaveAtlas(int type);
 
 private:

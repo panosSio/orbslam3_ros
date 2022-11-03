@@ -1,0 +1,104 @@
+%YAML:1.0
+
+##--------------------------------------------------------------------------------------------
+## Camera Parameters. Adjust them!
+##--------------------------------------------------------------------------------------------
+#Camera.type: "PinHole"
+
+##Camera calibration and distortion parameters (OpenCV)
+
+#Camera.fx: 286.304595947266
+#Camera.fy: 286.273712158203
+#Camera.cx: 417.1953125
+#Camera.cy: 399.115386962891
+
+#Camera.k1: -0.00604297406971455
+#Camera.k2: 0.0451732017099857
+#Camera.p1: -0.0425471812486649
+#Camera.p2: 0.00776465190574527
+
+#Camera.bFishEye: 100
+
+#Camera.width: 848
+#Camera.height: 800
+
+##Camera frames per second
+#Camera.fps: 30.0
+
+##stereo baseline times fx
+#Camera.bf: 64.0611
+
+##Color order of the images (0: BGR, 1: RGB. It is ignored if images are grayscale)
+#Camera.RGB: 1
+
+##Close/Far threshold. Baseline times.
+#ThDepth: 35.0
+
+
+Camera.type: "KannalaBrandt8"
+#   frame_id: "camera_fisheye1_optical_frame"
+# height: 800
+# width: 848
+# distortion_model: "equidistant"
+# D: [-0.007864823564887047, 0.045432429760694504, -0.04343501850962639, 0.007984111085534096, 0.0]
+# K: [286.1922912597656, 0.0, 416.743896484375, 0.0, 286.1814880371094, 404.2049865722656, 0.0, 0.0, 1.0]
+# R: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+# P: [286.1922912597656, 0.0, 416.743896484375, 0.0, 0.0, 286.1814880371094, 404.2049865722656, 0.0, 0.0, 0.0, 1.0, 0.0]
+
+# Camera calibration and distortion parameters (OpenCV) 
+Camera.fx: 286.1922912597656 # 190.97847715128717
+Camera.fy: 286.1814880371094 # 190.9733070521226
+Camera.cx: 416.743896484375 # 254.93170605935475
+Camera.cy: 404.2049865722656 # 256.8974428996504
+
+# Equidistant distortion 
+# Camera.bFishEye: 1
+Camera.k1: -0.007864823564887047 # 0.0034823894022493434
+Camera.k2: 0.045432429760694504  # 0.0007150348452162257
+Camera.k3: -0.04343501850962639  # -0.0020532361418706202
+Camera.k4: 0.007984111085534096  # 0.00020293673591811182
+
+# Camera resolution
+Camera.width: 848
+Camera.height: 800
+
+# Camera frames per second 
+Camera.fps: 30.0
+
+# Color order of the images (0: BGR, 1: RGB. It is ignored if images are grayscale)
+Camera.RGB: 1
+
+
+#--------------------------------------------------------------------------------------------
+#ORB Parameters
+#--------------------------------------------------------------------------------------------
+
+#ORB Extractor: Number of features per image
+ORBextractor.nFeatures: 1800
+
+#ORB Extractor: Scale factor between levels in the scale pyramid
+ORBextractor.scaleFactor: 1.8
+
+#ORB Extractor: Number of levels in the scale pyramid
+ORBextractor.nLevels: 12
+
+#ORB Extractor: Fast threshold
+#Image is divided in a grid. At each cell FAST are extracted imposing a minimum response.
+#Firstly we impose iniThFAST. If no corners are detected we impose a lower value minThFAST
+#You can lower these values if your images have low contrast
+ORBextractor.iniThFAST: 20
+ORBextractor.minThFAST: 7
+
+#--------------------------------------------------------------------------------------------
+#Viewer Parameters
+#--------------------------------------------------------------------------------------------
+Viewer.KeyFrameSize: 0.05
+Viewer.KeyFrameLineWidth: 1
+Viewer.GraphLineWidth: 0.9
+Viewer.PointSize: 2
+Viewer.CameraSize: 0.08
+Viewer.CameraLineWidth: 3
+Viewer.ViewpointX: 0
+Viewer.ViewpointY: -0.7
+Viewer.ViewpointZ: -1.8
+Viewer.ViewpointF: 500

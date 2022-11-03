@@ -24,10 +24,15 @@
 
 #include<ros/ros.h>
 #include <cv_bridge/cv_bridge.h>
+#include <image_transport/image_transport.h>
+#include <image_transport/publisher.h>
+#include <visualization_msgs/Marker.h>
 #include <message_filters/subscriber.h>
 #include <message_filters/time_synchronizer.h>
 #include <message_filters/sync_policies/approximate_time.h>
 #include <nav_msgs/Odometry.h>
+#include <nav_msgs/Path.h>
+#include <sensor_msgs/PointCloud2.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <tf/transform_broadcaster.h>
 #include <geometry_msgs/PoseStamped.h>
@@ -36,8 +41,18 @@
 
 #include"../../../include/System.h"
 #include"../../../include/Converter.h"
+#include"../../../include/Atlas.h"
+#include "../../../include/MapPoint.h"
+
 
 using namespace std;
+
+ 
+ ros::Time current_frame_time_;
+ std::string map_frame_id_param_;
+ int min_observations_per_point_ = 2;
+ image_transport::Publisher rendered_image_publisher_;
+ nav_msgs::Path path;
 
 class ImageGrabber
 {
@@ -45,21 +60,31 @@ public:
     ImageGrabber(ORB_SLAM3::System* pSLAM,ros::NodeHandle& nh):mpSLAM(pSLAM){
         pub_pose_current_frame0_ = nh.advertise<nav_msgs::Odometry>("/tesse/odom",10);
         pub_pose_current_frame1_ = nh.advertise<geometry_msgs::PoseStamped>("/orbslam3/odom",10);
+        map_points_publisher_ = nh.advertise<sensor_msgs::PointCloud2> ("/map_points", 1);
+        //marker_pub = nh.advertise<visualization_msgs::Marker>("visualization_marker", 10);
+        path_pub_ = nh.advertise<nav_msgs::Path>("/path", 10);
     }
 
     void GrabStereo(const sensor_msgs::ImageConstPtr& msgLeft,const sensor_msgs::ImageConstPtr& msgRight);
+    //void PublishMapPoints (std::vector<ORB_SLAM3::MapPoint*> map_points, ros::Publisher map_pub);
+    void MapPointsToPointCloud (std::vector<ORB_SLAM3::MapPoint*> map_points, ros::Publisher map_pub);
+    void PublishRenderedImage (ORB_SLAM3::FrameDrawer * frame);
 
     ORB_SLAM3::System* mpSLAM;
     bool do_rectify;
     cv::Mat M1l,M2l,M1r,M2r;
     ros::Publisher pub_pose_current_frame0_;
     ros::Publisher pub_pose_current_frame1_;
+    ros::Publisher map_points_publisher_;
+    ros::Publisher path_pub_;
+    //ros::Publisher marker_pub;
+    
     tf2_ros::TransformBroadcaster br_;
 };
 
 int main(int argc, char **argv)
 {
-    ros::init(argc, argv, "RGBD");
+        ros::init(argc, argv, "RGBD");
     ros::start();
 
     if(argc != 4)
@@ -70,11 +95,13 @@ int main(int argc, char **argv)
     }    
 
     // Create SLAM system. It initializes all system threads and gets ready to process frames.
-    ORB_SLAM3::System SLAM(argv[1],argv[2],ORB_SLAM3::System::STEREO,true);
-
+    ORB_SLAM3::System SLAM(argv[1],argv[2],ORB_SLAM3::System::STEREO,false); 
     ros::NodeHandle nh;
+    //image_transport::ImageTransport image;
 
-    ImageGrabber igb(&SLAM,nh);
+    ImageGrabber igb(&SLAM,nh);//,image);
+    image_transport::ImageTransport debug_image(nh);
+    rendered_image_publisher_ = debug_image.advertise ("/debug_image", 1);
 
     stringstream ss(argv[3]);
 	ss >> boolalpha >> igb.do_rectify;
@@ -213,11 +240,122 @@ void ImageGrabber::GrabStereo(const sensor_msgs::ImageConstPtr& msgLeft,const se
     transform.header.frame_id = "world";
     transform.child_frame_id = "base_link_gt";
     transform.header.stamp = msgLeft->header.stamp;
-    transform.transform.rotation = msg.pose.pose.orientation;
+    transform.transform.rotation.x = msg.pose.pose.orientation.x;
+    transform.transform.rotation.y = msg.pose.pose.orientation.z;
+    transform.transform.rotation.z = -1.0*msg.pose.pose.orientation.y;
+    transform.transform.rotation.w = msg.pose.pose.orientation.w;
+
     transform.transform.translation.x = msg.pose.pose.position.x;
-    transform.transform.translation.y = msg.pose.pose.position.y;
-    transform.transform.translation.z = msg.pose.pose.position.z;
+    transform.transform.translation.y = msg.pose.pose.position.z;
+    transform.transform.translation.z = -1.0*msg.pose.pose.position.y;
     br_.sendTransform(transform);
+
+    current_frame_time_ = msg.header.stamp;
+    map_frame_id_param_ = "world";
+    
+    //PublishMapPoints(mpSLAM->GetTrackedMapPoints(), map_points_publisher_);
+    //MapPointsToPointCloud (mpSLAM->GetTrackedMapPoints(), map_points_publisher_);
+    
+    geometry_msgs::PoseStamped pose;
+    pose.header.frame_id = "world";
+    pose.header.stamp = msg.header.stamp;
+    pose.pose.orientation.x = msg.pose.pose.orientation.x;
+    pose.pose.orientation.y = msg.pose.pose.orientation.z;
+    pose.pose.orientation.z = -1.0*msg.pose.pose.orientation.y;
+    pose.pose.orientation.w = msg.pose.pose.orientation.w;
+    pose.pose.position.x = msg.pose.pose.position.x;
+    pose.pose.position.y = msg.pose.pose.position.z;
+    pose.pose.position.z = -1.0*msg.pose.pose.position.y;
+
+    path.header.frame_id = "world";
+    path.header.stamp = msg.header.stamp;
+    path.poses.push_back(pose);
+    path_pub_.publish(path);
+
+    //Publish image with points
+    PublishRenderedImage(mpSLAM->getMpFrameDrawer());
+
 }
+
+
+ //void ImageGrabber::PublishMapPoints (std::vector<ORB_SLAM3::MapPoint*> map_points,ros::Publisher map_points_publisher_ ) {
+   //sensor_msgs::PointCloud2 cloud = MapPointsToPointCloud (map_points);
+   //map_points_publisher_.publish (cloud);
+   
+//}
+
+void ImageGrabber::MapPointsToPointCloud (std::vector<ORB_SLAM3::MapPoint*> map_points,ros::Publisher map_points_publisher_ ) {
+  if (map_points.size() == 0) {
+    std::cout << "Map point vector is empty!" << std::endl;
+  }
+
+  sensor_msgs::PointCloud2 cloud;
+
+  const int num_channels = 3; // x y z
+
+  cloud.header.stamp = current_frame_time_;
+  cloud.header.frame_id = map_frame_id_param_;
+  cloud.height = 1;
+  cloud.width = map_points.size();
+  cloud.is_bigendian = false;
+  cloud.is_dense = true;
+  cloud.point_step = num_channels * sizeof(float);
+  cloud.row_step = cloud.point_step * cloud.width;
+  cloud.fields.resize(num_channels);
+
+  std::string channel_id[] = { "x", "y", "z"};
+  for (int i = 0; i<num_channels; i++) {
+    cloud.fields[i].name = channel_id[i];
+    cloud.fields[i].offset = i * sizeof(float);
+    cloud.fields[i].count = 1;
+    cloud.fields[i].datatype = sensor_msgs::PointField::FLOAT32;
+  }
+
+   cloud.data.resize(cloud.row_step * cloud.height);
+
+    unsigned char *cloud_data_ptr = &(cloud.data[0]);
+
+  float data_array[num_channels];
+  ORB_SLAM3::Atlas* mpAtlas = mpSLAM->getAtlas();
+  const std::vector<ORB_SLAM3::MapPoint*> &vpMPs = mpAtlas->GetAllMapPoints();
+  const std::vector<ORB_SLAM3::MapPoint*> &vpRefMPs = mpAtlas->GetReferenceMapPoints();
+  set<ORB_SLAM3::MapPoint*> spRefMPs(vpRefMPs.begin(), vpRefMPs.end());
+
+  if(vpMPs.empty())
+      return;
+
+  for(size_t i=0, iend=vpMPs.size(); i<iend;i++)
+  {
+      if(vpMPs[i]->isBad() || spRefMPs.count(vpMPs[i]))
+         continue;
+      //cv::Mat pos = vpMPs[i]->GetWorldPos();
+      data_array[0] = vpMPs[i]->GetWorldPos().at<float> (2); //x. Do the transformation by just reading at the position of z instead of x
+      data_array[1] = -1.0* vpMPs[i]->GetWorldPos().at<float>(0); //y. Do the transformation by just reading at the position of x instead of y
+      data_array[2] = -1.0* vpMPs[i]->GetWorldPos().at<float> (1); //z. Do the transformation by just reading at the position of y instead of z
+       //TODO dont hack the transformation but have a central conversion function for MapPointsToPointCloud and TransformFromMat
+
+      memcpy(cloud_data_ptr+(i*cloud.point_step), data_array, num_channels*sizeof(float));
+  }
+
+  map_points_publisher_.publish (cloud);
+  //return cloud;
+}
+
+
+void ImageGrabber::PublishRenderedImage (ORB_SLAM3::FrameDrawer * frame) {
+    
+    cv::Mat toShow;
+    cv::Mat im = frame->DrawFrame(true);
+    cv::Mat imRight = frame->DrawRightFrame();
+    cv::hconcat(im,imRight,toShow);
+       
+    std_msgs::Header header;
+    header.stamp = current_frame_time_;
+    header.frame_id = map_frame_id_param_;
+    const sensor_msgs::ImagePtr rendered_image_msg = cv_bridge::CvImage(header, "bgr8", toShow).toImageMsg();
+    rendered_image_publisher_.publish(rendered_image_msg);
+}
+
+
 
 
